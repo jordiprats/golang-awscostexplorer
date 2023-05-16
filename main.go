@@ -1,12 +1,12 @@
 package main
 
 import (
-	"log"
 	"net/http"
 	"strconv"
 	"sync"
 	"time"
 
+	"github.com/apex/log"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/costexplorer"
@@ -73,6 +73,8 @@ func getMonthlyCost(c *gin.Context) {
 		return
 	}
 
+	log.Debugf("GetCostAndUsage output: %+v", output)
+
 	// Process the API response and build the result
 	result := make(map[string]map[string]float64)
 	for _, monthData := range output.ResultsByTime {
@@ -98,7 +100,9 @@ func getMonthlyCost(c *gin.Context) {
 func main() {
 	dataCache = cache.New(24*time.Hour, 1*time.Hour) // Cache data for 24 hours, refresh every 1 hour
 
+	log.SetLevel(log.DebugLevel)
+
 	r := gin.Default()
 	r.GET("/monthly-cost", getMonthlyCost)
-	log.Fatal(r.Run(":8080"))
+	r.Run(":8080")
 }
