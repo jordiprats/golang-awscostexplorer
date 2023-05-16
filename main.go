@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
 	"net/http"
 	"strconv"
 	"sync"
@@ -12,12 +14,89 @@ import (
 	"github.com/aws/aws-sdk-go/service/costexplorer"
 	"github.com/gin-gonic/gin"
 	"github.com/patrickmn/go-cache"
+	"github.com/wcharczuk/go-chart/v2"
 )
 
 var (
 	dataCache *cache.Cache
 	cacheLock sync.Mutex
 )
+
+func visualizeMonthlyCost(c *gin.Context) {
+	// Check if data is present in the cache
+	cacheLock.Lock()
+	cachedData, found := dataCache.Get("monthly-cost")
+	cacheLock.Unlock()
+
+	if !found {
+		// Cached data not found, call the /monthly-cost endpoint
+		response, err := http.Get("http://localhost:8080/monthly-cost")
+		if err != nil || response.StatusCode != http.StatusOK {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve cost data"})
+			return
+		}
+		defer response.Body.Close()
+
+		var costData map[string]map[string]float64
+		err = json.NewDecoder(response.Body).Decode(&costData)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to parse cost data"})
+			return
+		}
+
+		// Cache the retrieved cost data
+		cacheLock.Lock()
+		dataCache.Set("monthly-cost", costData, cache.DefaultExpiration)
+		cacheLock.Unlock()
+
+		// Use the retrieved cost data for visualization
+		renderChart(c, costData)
+		return
+	}
+
+	// Retrieve the cached cost data
+	costData, ok := cachedData.(map[string]map[string]float64)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid cost data format"})
+		return
+	}
+
+	// Use the cached cost data for visualization
+	renderChart(c, costData)
+}
+
+func renderChart(c *gin.Context, costData map[string]map[string]float64) {
+	// Prepare the chart data
+	var months []string
+	var totalCosts []float64
+
+	for month, data := range costData {
+		months = append(months, month)
+
+		// Calculate the total cost for the month
+		var totalCost float64
+		for _, cost := range data {
+			totalCost += cost
+		}
+
+		totalCosts = append(totalCosts, totalCost)
+	}
+
+	// Create the bar chart
+	barChart := chart.BarChart{
+		// Existing chart configuration...
+	}
+
+	// Render the chart
+	buffer := bytes.NewBuffer([]byte{})
+	err := barChart.Render(chart.PNG, buffer)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to render chart"})
+		return
+	}
+
+	c.Data(http.StatusOK, "image/png", buffer.Bytes())
+}
 
 func getMonthlyCost(c *gin.Context) {
 	// Check if data is present in the cache
@@ -103,6 +182,7 @@ func main() {
 	log.SetLevel(log.DebugLevel)
 
 	r := gin.Default()
-	r.GET("/monthly-cost", getMonthlyCost)
+	r.GET("/monthly-cost.json", getMonthlyCost)
+	r.GET("/monthly-cost.png", getMonthlyCost)
 	r.Run(":8080")
 }
