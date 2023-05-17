@@ -1,23 +1,17 @@
 name: build container
-
 on:
   push:
     tags:
       - '[0-9]+.[0-9]+'
-  workflow_dispatch:
-    inputs:
-      custom-tag:
-        description: 'Custom tag for build'
-        required: false
 
 jobs:
   docker:
     runs-on: ubuntu-latest
     steps:
 
-      - name: Get tag input or use latest tag
+      - name: Get latest tag
         id: vars
-        run: echo "::set-output name=tag::${{ github.event.inputs.custom-tag || (github.ref | split('/') | last) }}"
+        run: echo ::set-output name=tag::${GITHUB_REF:10}
 
       - name: Clone repository
         uses: actions/checkout@v2
@@ -45,4 +39,4 @@ jobs:
           context: .
           platforms: linux/amd64,linux/arm64,linux/arm/v7
           push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/awscost:${{ steps.vars.outputs.tag }}
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/flask-pet2cattle:${{ steps.vars.outputs.tag }}
