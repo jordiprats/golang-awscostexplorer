@@ -1,9 +1,9 @@
-all: clean webcost
+all: clean awscost
 
 .PHONY: clean
 clean:
-	rm -f webcost
+	rm -f awscost
 
-webcost:
+awscost:
 	go mod download
-	go build -a -o webcost main.go
+	go build -a -o awscost main.go
