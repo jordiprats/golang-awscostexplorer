@@ -25,11 +25,13 @@ spec:
             secretKeyRef:
               name: aws-credentials
               key: access-key
+          value: ""
         - name: AWS_SECRET_ACCESS_KEY
           valueFrom:
             secretKeyRef:
               name: aws-credentials
               key: access-key-secret
+          value: ""
         - name: AWS_DEFAULT_REGION
           value: "us-west-2"
         resources:
