@@ -12,7 +12,9 @@ RUN make all
 # container
 FROM alpine:latest
 
-COPY --from=builder /build/awscost /usr/local/bin
+RUN apk --no-cache add libc6-compat
+
+COPY --from=builder /build/awscost /usr/local/bin/awscost
 
 WORKDIR /web
 
