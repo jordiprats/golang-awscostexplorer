@@ -17,19 +17,19 @@ spec:
       serviceAccountName: awscost
       containers:
       - name: awscost
-        image: jordiprats/awscost:0.0
+        image: jordiprats/awscost:1.0
         imagePullPolicy: Always
         env:
         - name: AWS_ACCESS_KEY_ID
           valueFrom:
             secretKeyRef:
-              name: aws-credentials
+              name: aws-ce-credentials
               key: access-key
               optional: true
         - name: AWS_SECRET_ACCESS_KEY
           valueFrom:
             secretKeyRef:
-              name: aws-credentials
+              name: aws-ce-credentials
               key: access-key-secret
               optional: true
         - name: AWS_DEFAULT_REGION
