@@ -2,8 +2,12 @@ package main
 
 import (
 	"bytes"
-	"encoding/json"
+	"image"
+	"image/color"
+	"image/draw"
+	"image/png"
 	"net/http"
+	"os"
 	"strconv"
 	"sync"
 	"time"
@@ -12,9 +16,9 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/costexplorer"
+	"github.com/gin-contrib/static"
 	"github.com/gin-gonic/gin"
 	"github.com/patrickmn/go-cache"
-	"github.com/wcharczuk/go-chart/v2"
 )
 
 var (
@@ -22,80 +26,151 @@ var (
 	cacheLock sync.Mutex
 )
 
-func visualizeMonthlyCost(c *gin.Context) {
-	// Check if data is present in the cache
-	cacheLock.Lock()
-	cachedData, found := dataCache.Get("monthly-cost")
-	cacheLock.Unlock()
-
-	if !found {
-		// Cached data not found, call the /monthly-cost endpoint
-		response, err := http.Get("http://localhost:8080/monthly-cost")
-		if err != nil || response.StatusCode != http.StatusOK {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve cost data"})
-			return
-		}
-		defer response.Body.Close()
-
-		var costData map[string]map[string]float64
-		err = json.NewDecoder(response.Body).Decode(&costData)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to parse cost data"})
-			return
-		}
-
-		// Cache the retrieved cost data
-		cacheLock.Lock()
-		dataCache.Set("monthly-cost", costData, cache.DefaultExpiration)
-		cacheLock.Unlock()
-
-		// Use the retrieved cost data for visualization
-		renderChart(c, costData)
+func generateFaviconHandler(c *gin.Context) {
+	// Generate the favicon image
+	faviconImage, err := generateFavicon()
+	if err != nil {
+		c.String(http.StatusInternalServerError, "Failed to generate favicon")
 		return
 	}
 
-	// Retrieve the cached cost data
-	costData, ok := cachedData.(map[string]map[string]float64)
-	if !ok {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid cost data format"})
+	// Create a buffer to write the favicon image
+	faviconBuffer := new(bytes.Buffer)
+
+	// Encode the favicon image as PNG format
+	err = png.Encode(faviconBuffer, faviconImage)
+	if err != nil {
+		c.String(http.StatusInternalServerError, "Failed to encode favicon")
 		return
 	}
 
-	// Use the cached cost data for visualization
-	renderChart(c, costData)
+	// Set the response header for the favicon
+	c.Header("Content-Type", "image/x-icon")
+
+	// Write the favicon image buffer to the response
+	c.Writer.WriteHeader(http.StatusOK)
+	c.Writer.Write(faviconBuffer.Bytes())
 }
 
-func renderChart(c *gin.Context, costData map[string]map[string]float64) {
-	// Prepare the chart data
-	var months []string
-	var totalCosts []float64
+func generateFavicon() (image.Image, error) {
+	// Create a new image for the favicon with a transparent background
+	faviconImage := image.NewRGBA(image.Rect(0, 0, 16, 16))
 
-	for month, data := range costData {
-		months = append(months, month)
+	// Set the color for the golden circle
+	goldenColor := color.RGBA{R: 255, G: 215, B: 0, A: 255}
 
-		// Calculate the total cost for the month
-		var totalCost float64
-		for _, cost := range data {
-			totalCost += cost
+	// Draw a filled golden circle on the favicon image
+	drawCircle(faviconImage, 8, 8, 7, goldenColor)
+
+	return faviconImage, nil
+}
+
+func drawCircle(img draw.Image, x, y, radius int, col color.RGBA) {
+	// Iterate over the pixels in the circle and set the color
+	for i := x - radius; i < x+radius; i++ {
+		for j := y - radius; j < y+radius; j++ {
+			if (i-x)*(i-x)+(j-y)*(j-y) < radius*radius {
+				img.Set(i, j, col)
+			}
 		}
-
-		totalCosts = append(totalCosts, totalCost)
 	}
+}
 
-	// Create the bar chart
-	barChart := chart.BarChart{
-		// Existing chart configuration...
-	}
+func getWeeklyCost(c *gin.Context) {
+	// Check if data is present in the cache
+	cacheLock.Lock()
+	cachedData, found := dataCache.Get("previous-four-weeks-data")
+	cacheLock.Unlock()
 
-	// Render the chart
-	buffer := bytes.NewBuffer([]byte{})
-	err := barChart.Render(chart.PNG, buffer)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to render chart"})
+	if found {
+		c.JSON(http.StatusOK, cachedData)
 		return
 	}
 
-	c.Data(http.StatusOK, "image/png", buffer.Bytes())
+	// Set up an AWS session
+	sess, err := session.NewSession(&aws.Config{
+		Region: aws.String(os.Getenv("AWS_DEFAULT_REGION")),
+	})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create AWS session"})
+		return
+	}
+
+	svc := costexplorer.New(sess)
+
+	// Calculate the start and end dates for the previous 4 weeks
+	end := time.Now().AddDate(0, 0, -1) // End at yesterday
+	start := end.AddDate(0, 0, -27)     // Start 4 weeks before yesterday
+
+	// Make the API call to retrieve the cost and usage data
+	input := &costexplorer.GetCostAndUsageInput{
+		TimePeriod: &costexplorer.DateInterval{
+			Start: aws.String(start.Format("2006-01-02")),
+			End:   aws.String(end.Format("2006-01-02")),
+		},
+		Granularity: aws.String("DAILY"),
+		Metrics:     []*string{aws.String("BlendedCost")},
+		GroupBy: []*costexplorer.GroupDefinition{
+			{
+				Type: aws.String("DIMENSION"),
+				Key:  aws.String("SERVICE"),
+			},
+		},
+	}
+
+	log.Info("getWeeklyCost: requesting data to AWS")
+	output, err := svc.GetCostAndUsage(input)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":     "Failed to retrieve cost and usage data",
+			"exception": err.Error(),
+			"start":     start.String(),
+			"end":       end.String(),
+		})
+		return
+	}
+
+	log.Debugf("getWeeklyCost: GetCostAndUsage output: %+v", output)
+
+	// Process the API response and build the result
+	result := make(map[string]map[string]float64)
+	categories := make(map[string]bool)
+
+	// Retrieve all unique categories
+	for _, dayData := range output.ResultsByTime {
+		for _, group := range dayData.Groups {
+			category := *group.Keys[0]
+			categories[category] = true
+		}
+	}
+
+	// Initialize categories for each day with 0 values
+	for _, dayData := range output.ResultsByTime {
+		day := *dayData.TimePeriod.Start
+		result[day] = make(map[string]float64)
+		for category := range categories {
+			result[day][category] = 0
+		}
+	}
+
+	// Update the result with actual data
+	for _, dayData := range output.ResultsByTime {
+		day := *dayData.TimePeriod.Start
+		for _, group := range dayData.Groups {
+			category := *group.Keys[0]
+			amountFloat, err := strconv.ParseFloat(*group.Metrics["BlendedCost"].Amount, 64)
+			if err == nil {
+				result[day][category] = -amountFloat
+			}
+		}
+	}
+
+	// Cache the result
+	cacheLock.Lock()
+	dataCache.Set("previous-four-weeks-data", result, cache.DefaultExpiration)
+	cacheLock.Unlock()
+
+	c.JSON(http.StatusOK, result)
 }
 
 func getMonthlyCost(c *gin.Context) {
@@ -111,7 +186,7 @@ func getMonthlyCost(c *gin.Context) {
 
 	// Set up an AWS session
 	sess, err := session.NewSession(&aws.Config{
-		Region: aws.String("us-west-2"), // Replace with your desired AWS region
+		Region: aws.String(os.Getenv("AWS_DEFAULT_REGION")),
 	})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create AWS session"})
@@ -141,6 +216,7 @@ func getMonthlyCost(c *gin.Context) {
 		},
 	}
 
+	log.Info("getMonthlyCost: requesting data to AWS")
 	output, err := svc.GetCostAndUsage(input)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -156,14 +232,33 @@ func getMonthlyCost(c *gin.Context) {
 
 	// Process the API response and build the result
 	result := make(map[string]map[string]float64)
-	for _, monthData := range output.ResultsByTime {
-		month := *monthData.TimePeriod.Start
-		result[month] = make(map[string]float64)
-		for _, group := range monthData.Groups {
+	categories := make(map[string]bool)
+
+	// Retrieve all unique categories
+	for _, dayData := range output.ResultsByTime {
+		for _, group := range dayData.Groups {
 			category := *group.Keys[0]
-			amount_float, err := strconv.ParseFloat(*group.Metrics["BlendedCost"].Amount, 64)
+			categories[category] = true
+		}
+	}
+
+	// Initialize categories for each day with 0 values
+	for _, dayData := range output.ResultsByTime {
+		day := *dayData.TimePeriod.Start
+		result[day] = make(map[string]float64)
+		for category := range categories {
+			result[day][category] = 0
+		}
+	}
+
+	// Update the result with actual data
+	for _, dayData := range output.ResultsByTime {
+		day := *dayData.TimePeriod.Start
+		for _, group := range dayData.Groups {
+			category := *group.Keys[0]
+			amountFloat, err := strconv.ParseFloat(*group.Metrics["BlendedCost"].Amount, 64)
 			if err == nil {
-				result[month][category] = amount_float
+				result[day][category] = -amountFloat
 			}
 		}
 	}
@@ -177,12 +272,21 @@ func getMonthlyCost(c *gin.Context) {
 }
 
 func main() {
-	dataCache = cache.New(24*time.Hour, 1*time.Hour) // Cache data for 24 hours, refresh every 1 hour
+	dataCache = cache.New(24*time.Hour, 24*time.Hour)
 
-	log.SetLevel(log.DebugLevel)
+	// Set the log level based on the GIN_MODE environment variable
+	if os.Getenv("GIN_MODE") == "release" {
+		log.SetLevel(log.InfoLevel)
+	} else {
+		log.SetLevel(log.DebugLevel)
+	}
 
 	r := gin.Default()
 	r.GET("/monthly-cost.json", getMonthlyCost)
-	r.GET("/monthly-cost.png", getMonthlyCost)
+	r.GET("/weekly-cost.json", getWeeklyCost)
+
+	r.GET("/favicon.ico", generateFaviconHandler)
+
+	r.Use(static.Serve("/", static.LocalFile("./public", true)))
 	r.Run(":8080")
 }
