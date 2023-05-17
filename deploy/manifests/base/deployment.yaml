@@ -48,7 +48,7 @@ spec:
           failureThreshold: 3
           httpGet:
             path: /favicon.ico
-            port: 8081
+            port: 8080
             scheme: HTTP
           initialDelaySeconds: 10
           periodSeconds: 10
@@ -58,7 +58,7 @@ spec:
           failureThreshold: 3
           httpGet:
             path: /favicon.ico
-            port: 8081
+            port: 8080
             scheme: HTTP
           initialDelaySeconds: 30
           periodSeconds: 10
