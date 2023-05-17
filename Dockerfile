@@ -5,6 +5,7 @@ WORKDIR /build
 ADD main.go /build
 ADD go.sum /build
 ADD go.mod /build
+ADD Makefile /build
 
 RUN make all
 

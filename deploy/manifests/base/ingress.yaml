@@ -1,0 +1,20 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: awscost
+spec:
+  rules:
+  - host: awscost.pet2cattle.com
+    http:
+      paths:
+      - backend:
+          service:
+            name: awscost
+            port:
+              name: http
+        path: /
+        pathType: Prefix
+  tls:
+  - hosts:
+    - awscost.pet2cattle.com
+    secretName: awscost-pet2cattle-https-cert
