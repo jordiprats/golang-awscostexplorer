@@ -18,7 +18,7 @@ COPY --from=builder /build/awscost /usr/local/bin/awscost
 
 WORKDIR /web
 
-ADD public /web
+ADD public/ /web/
 
 ENV GIN_MODE=release
 

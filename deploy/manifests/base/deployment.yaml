@@ -17,7 +17,7 @@ spec:
       serviceAccountName: awscost
       containers:
       - name: awscost
-        image: jordiprats/awscost:1.0
+        image: jordiprats/awscost:0.0
         imagePullPolicy: Always
         env:
         - name: AWS_ACCESS_KEY_ID
