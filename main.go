@@ -121,12 +121,16 @@ func getWeeklyCost(c *gin.Context) {
 	log.Info("getWeeklyCost: requesting data to AWS")
 	output, err := svc.GetCostAndUsage(input)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":     "Failed to retrieve cost and usage data",
-			"exception": err.Error(),
-			"start":     start.String(),
-			"end":       end.String(),
-		})
+		response := gin.H{
+			"error": "Failed to retrieve cost and usage data",
+			"start": start.String(),
+			"end":   end.String(),
+		}
+		if os.Getenv("GIN_MODE") != "release" {
+			response["exception"] = err.Error()
+		}
+
+		c.JSON(http.StatusInternalServerError, response)
 		return
 	}
 
@@ -219,12 +223,16 @@ func getMonthlyCost(c *gin.Context) {
 	log.Info("getMonthlyCost: requesting data to AWS")
 	output, err := svc.GetCostAndUsage(input)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":     "Failed to retrieve cost and usage data",
-			"exception": err.Error(),
-			"start":     start.String(),
-			"end":       end.String(),
-		})
+		response := gin.H{
+			"error": "Failed to retrieve cost and usage data",
+			"start": start.String(),
+			"end":   end.String(),
+		}
+		if os.Getenv("GIN_MODE") != "release" {
+			response["exception"] = err.Error()
+		}
+
+		c.JSON(http.StatusInternalServerError, response)
 		return
 	}
 
