@@ -182,7 +182,7 @@ func getWeeklyCost(c *gin.Context) {
 			category := *group.Keys[0]
 			amountFloat, err := strconv.ParseFloat(*group.Metrics["BlendedCost"].Amount, 64)
 			if err == nil {
-				result[day][category] = -amountFloat
+				result[day][category] = amountFloat
 			}
 		}
 	}
@@ -302,7 +302,7 @@ func getMonthlyCost(c *gin.Context) {
 			category := *group.Keys[0]
 			amountFloat, err := strconv.ParseFloat(*group.Metrics["BlendedCost"].Amount, 64)
 			if err == nil {
-				result[day][category] = -amountFloat
+				result[day][category] = amountFloat
 			}
 		}
 	}
