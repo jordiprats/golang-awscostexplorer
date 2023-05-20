@@ -116,6 +116,24 @@ func getWeeklyCost(c *gin.Context) {
 				Key:  aws.String("SERVICE"),
 			},
 		},
+		Filter: &costexplorer.Expression{
+			And: []*costexplorer.Expression{
+				{
+					Dimensions: &costexplorer.DimensionValues{
+						Key:    aws.String("RECORD_TYPE"),
+						Values: []*string{aws.String("Usage")},
+					},
+				},
+				{
+					Not: &costexplorer.Expression{
+						Dimensions: &costexplorer.DimensionValues{
+							Key:    aws.String("USAGE_TYPE"),
+							Values: []*string{aws.String("Credit"), aws.String("Refund")},
+						},
+					},
+				},
+			},
+		},
 	}
 
 	log.Info("getWeeklyCost: requesting data to AWS")
@@ -216,6 +234,24 @@ func getMonthlyCost(c *gin.Context) {
 			{
 				Type: aws.String("DIMENSION"),
 				Key:  aws.String("SERVICE"),
+			},
+		},
+		Filter: &costexplorer.Expression{
+			And: []*costexplorer.Expression{
+				{
+					Dimensions: &costexplorer.DimensionValues{
+						Key:    aws.String("RECORD_TYPE"),
+						Values: []*string{aws.String("Usage")},
+					},
+				},
+				{
+					Not: &costexplorer.Expression{
+						Dimensions: &costexplorer.DimensionValues{
+							Key:    aws.String("USAGE_TYPE"),
+							Values: []*string{aws.String("Credit"), aws.String("Refund")},
+						},
+					},
+				},
 			},
 		},
 	}
