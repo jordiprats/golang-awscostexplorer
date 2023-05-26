@@ -220,7 +220,7 @@ func getMonthlyCost(c *gin.Context) {
 	// Calculate the start and end dates for the previous year
 	now := time.Now()
 	end := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC).Add(-time.Nanosecond)
-	start := end.AddDate(0, -12, 0)
+	start := end.AddDate(0, -11, 0)
 
 	// Make the API call to retrieve the cost and usage data
 	input := &costexplorer.GetCostAndUsageInput{
