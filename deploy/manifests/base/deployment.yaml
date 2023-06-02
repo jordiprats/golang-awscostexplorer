@@ -17,7 +17,7 @@ spec:
       serviceAccountName: awscost
       containers:
       - name: awscost
-        image: jordiprats/awscost:1.6
+        image: jordiprats/awscost:1.7
         imagePullPolicy: IfNotPresent
         env:
         - name: AWS_ACCESS_KEY_ID
